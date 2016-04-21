@@ -3,6 +3,16 @@ defmodule Ed25519Test do
   import VectorHelper
   doctest Ed25519
 
+  test "keys" do
+    {sk,pk} = Ed25519.generate_key_pair
+
+    assert byte_size(sk) == 32, "Proper sized secret key"
+    assert byte_size(pk) == 32, "Proper sized public key"
+
+    assert Ed25519.derive_public_key(sk) == pk, "Can re-derive the public key from the secret key"
+
+  end
+
   test "cr.yp.to examples" do
     test_em = fn
               ([], _fun)              -> :noop

@@ -119,6 +119,17 @@ defmodule Ed25519 do
   def valid_signature?(_s,_m_,_pk), do: false
 
   @doc """
+  Generate a secret/public key pair
+
+  Returned tuple contains `{random_secret_key, derived_public_key}`
+  """
+  @spec generate_key_pair :: {key,key}
+  def generate_key_pair do
+    secret = :crypto.strong_rand_bytes(32)
+    {secret, derive_public_key(secret)}
+  end
+
+  @doc """
   derive the public signing key from the secret key
   """
   @spec derive_public_key(key) :: key
