@@ -1,5 +1,5 @@
 defmodule Ed25519Test do
-  use PowerAssert
+  use ExUnit.Case
   import VectorHelper
   doctest Ed25519
 
