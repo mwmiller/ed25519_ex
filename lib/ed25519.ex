@@ -26,7 +26,7 @@ defmodule Ed25519 do
   defp xrecover(y) do
     xx = (y*y-1) * inv(@d*y*y+1)
     x = expmod(xx,div(@p+3,8),@p)
-    if (x*x - xx) |> mod(@p) != 0, do: x = (x*@i) |> mod(@p)
+    x = if (x*x - xx) |> mod(@p) != 0, do: (x*@i) |> mod(@p), else: x
     if x |> mod(2) != 0, do: @p-x, else: x
   end
 
