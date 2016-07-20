@@ -3,7 +3,7 @@ defmodule Ed25519.Mixfile do
 
   def project do
     [app: :ed25519,
-     version: "0.2.2",
+     version: "0.2.3",
      elixir: "~> 1.3",
      name: "Ed25519",
      source_url: "https://github.com/mwmiller/ed25519_ex",
@@ -20,8 +20,8 @@ defmodule Ed25519.Mixfile do
 
   defp deps do
     [
-      {:earmark, "~> 0.2", only: :dev},
-      {:ex_doc, "~> 0.12", only: :dev},
+      {:earmark, "~> 1.0", only: :dev},
+      {:ex_doc, "~> 0.13", only: :dev},
     ]
   end
 
