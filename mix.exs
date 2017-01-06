@@ -3,15 +3,15 @@ defmodule Ed25519.Mixfile do
 
   def project do
     [app: :ed25519,
-     version: "0.2.4",
-     elixir: "~> 1.3",
+     version: "0.2.5",
+     elixir: "~> 1.4",
      name: "Ed25519",
      source_url: "https://github.com/mwmiller/ed25519_ex",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
-     description: description,
-     package: package,
-     deps: deps]
+     description: description(),
+     package: package(),
+     deps: deps()]
   end
 
   def application do
