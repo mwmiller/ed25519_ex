@@ -25,8 +25,14 @@ defmodule Ed25519 do
   defp xrecover(y) do
     xx = (y*y-1) * inv(@d*y*y+1)
     x = expmod(xx,div(@p+3,8),@p)
-    x = if (x*x - xx) |> mod(@p) != 0, do: (x*@i) |> mod(@p), else: x
-    if x |> mod(2) != 0, do: @p-x, else: x
+    x = case (x*x - xx) |> mod(@p) do
+          0 -> x
+          _ -> (x*@i) |> mod(@p)
+        end
+    case x |> mod(2) do
+      0 -> @p - x
+      _ -> x
+    end
   end
 
   defp mod(x,_y) when x == 0, do: 0
@@ -41,7 +47,10 @@ defmodule Ed25519 do
   defp expmod(_b,0,_m), do: 1
   defp expmod(b,e,m) do
        t = b |> expmod(div(e,2), m) |> square |> mod(m)
-       if (e &&& 1) == 1, do: (t * b) |> mod(m), else: t
+       case (e &&& 1) do
+         1 -> (t * b) |> mod(m)
+         _ -> t
+       end
   end
 
   defp inv(x), do: x |> expmod(@p - 2, @p)
@@ -65,8 +74,14 @@ defmodule Ed25519 do
     xc = decoded |> bsr(255)
     y  = decoded |> band(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
     x  = xrecover(y)
-    point = (if (x &&& 1) == xc, do: {x,y}, else: {@p - x, y})
-    if isoncurve(point), do: point, else: raise("Point off curve")
+    point = case (x &&& 1) do
+      ^xc -> {x,y}
+      _   -> {@p - x, y}
+    end
+    cond do
+      isoncurve(point) -> point
+      true             -> raise("Point off curve")
+    end
   end
 
   defp isoncurve({x,y}), do: (-x*x + y*y - 1 - @d*x*x*y*y) |> mod(@p) == 0
@@ -100,7 +115,10 @@ defmodule Ed25519 do
   defp scalarmult(e, p) do
      q = e |> div(2) |> scalarmult(p)
      q = edwards(q,q)
-     if (e &&& 1) == 1, do: edwards(q,p), else: q
+     case (e &&& 1) do
+       1 -> edwards(q,p)
+       _ -> q
+     end
   end
 
   @doc """
