@@ -42,15 +42,19 @@ defmodule Ed25519 do
   defp hash(m), do: :crypto.hash(:sha512,m)
   defp hashint(m), do: m |> hash |> decodeint
 
-  defp square(x), do: x * x
-
+  # :crypto.mod_pow chokes on negative inputs, so we feed it positive values
+  # only and patch up the result if necessary
   defp expmod(_b,0,_m), do: 1
+  defp expmod(b,e,m) when b > 0 do
+    b |> :crypto.mod_pow(e,m) |> :binary.decode_unsigned
+  end
   defp expmod(b,e,m) do
-       t = b |> expmod(div(e,2), m) |> square |> mod(m)
-       case (e &&& 1) do
-         1 -> (t * b) |> mod(m)
-         _ -> t
-       end
+    i = b |> abs() |> :crypto.mod_pow(e,m) |> :binary.decode_unsigned
+    cond do
+      mod(e, 2) == 0  -> i
+      i == 0          -> i
+      true            -> m - i
+    end
   end
 
   defp inv(x), do: x |> expmod(@p - 2, @p)
