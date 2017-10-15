@@ -4,6 +4,24 @@ defmodule Ed25519 do
   Ed25519 signature functions
 
   This is mostly suitable as part of a pure Elixir solution.
+
+  ## Configuration
+
+  *No configuration is needed* in most cases. However, if needed, a custom hash
+  function can be configured. As per the specification - `sha512` is the default.
+
+  `config/config.exs`
+
+      use Mix.Config
+
+      # The hash function will be invoked as 'Blake2.hash2b(payload, 16)'
+      config :ed25519,
+        hash_fn: {Blake2, :hash2b, [], [16]}
+
+      # The hash function will be invoked as ':crypto.hash(:sha256, payload)'
+      config :ed25519,
+        hash_fn: {:crypto, :hash, [:sha256], []}
+
   """
   @typedoc """
   public or secret key
@@ -40,7 +58,9 @@ defmodule Ed25519 do
   defp mod(x, y) when x > 0, do: rem(x, y)
   defp mod(x, y) when x < 0, do: rem(y + rem(x, y), y)
 
-  defp hash(m), do: :crypto.hash(:sha512, m)
+  # __using__ Macro generates the hash function at compile time, which allows the
+  # hashing function to be configurable without runtime overhead
+  use Ed25519.Hash
   defp hashint(m), do: m |> hash |> decodeint
 
   # :crypto.mod_pow chokes on negative inputs, so we feed it positive values
