@@ -4,6 +4,5 @@
 /doc
 erl_crash.dump
 *.ez
-mix.lock
 *.beam
 *.swp
