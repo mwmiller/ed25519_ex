@@ -1,5 +1,6 @@
 defmodule Ed25519 do
   use Bitwise
+
   @moduledoc """
   Ed25519 signature functions
 
@@ -44,10 +45,13 @@ defmodule Ed25519 do
   defp xrecover(y) do
     xx = (y * y - 1) * inv(@d * y * y + 1)
     x = expmod(xx, div(@p + 3, 8), @p)
-    x = case (x * x - xx) |> mod(@p) do
-          0 -> x
-          _ -> mod(x * @i, @p)
-        end
+
+    x =
+      case (x * x - xx) |> mod(@p) do
+        0 -> x
+        _ -> mod(x * @i, @p)
+      end
+
     case x |> mod(2) do
       0 -> @p - x
       _ -> x
@@ -66,50 +70,59 @@ defmodule Ed25519 do
   # :crypto.mod_pow chokes on negative inputs, so we feed it positive values
   # only and patch up the result if necessary
   defp expmod(_b, 0, _m), do: 1
+
   defp expmod(b, e, m) when b > 0 do
-    b |> :crypto.mod_pow(e, m) |> :binary.decode_unsigned
+    b |> :crypto.mod_pow(e, m) |> :binary.decode_unsigned()
   end
+
   defp expmod(b, e, m) do
-    i = b |> abs() |> :crypto.mod_pow(e, m) |> :binary.decode_unsigned
+    i = b |> abs() |> :crypto.mod_pow(e, m) |> :binary.decode_unsigned()
+
     cond do
-      mod(e, 2) == 0  -> i
-      i == 0          -> i
-      true            -> m - i
+      mod(e, 2) == 0 -> i
+      i == 0 -> i
+      true -> m - i
     end
   end
 
   defp inv(x), do: x |> expmod(@p - 2, @p)
 
   defp edwards({x1, y1}, {x2, y2}) do
-   x = (x1 * y2 + x2 * y1) * inv(1 + @d * x1 * x2 * y1 * y2)
-   y = (y1 * y2 + x1 * x2) * inv(1 - @d * x1 * x2 * y1 * y2)
-   {mod(x, @p), mod(y, @p)}
+    x = (x1 * y2 + x2 * y1) * inv(1 + @d * x1 * x2 * y1 * y2)
+    y = (y1 * y2 + x1 * x2) * inv(1 - @d * x1 * x2 * y1 * y2)
+    {mod(x, @p), mod(y, @p)}
   end
 
   defp encodeint(x), do: x |> :binary.encode_unsigned(:little)
+
   defp encodepoint({x, y}) do
-      y |> band(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
-        |> bor((x &&& 1) <<< 255)
-        |> encodeint
+    y
+    |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+    |> bor((x &&& 1) <<< 255)
+    |> encodeint
   end
 
   defp decodeint(x), do: x |> :binary.decode_unsigned(:little)
+
   defp decodepoint(n) do
     decoded = n |> :binary.decode_unsigned(:little)
     xc = decoded |> bsr(255)
-    y  = decoded |> band(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
-    x  = xrecover(y)
-    point = case (x &&& 1) do
-      ^xc -> {x, y}
-      _   -> {@p - x, y}
-    end
+    y = decoded |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+    x = xrecover(y)
+
+    point =
+      case x &&& 1 do
+        ^xc -> {x, y}
+        _ -> {@p - x, y}
+      end
+
     if isoncurve(point), do: point, else: raise("Point off curve")
   end
 
   defp isoncurve({x, y}), do: (-x * x + y * y - 1 - @d * x * x * y * y) |> mod(@p) == 0
 
   defp rightsize(n, s) when byte_size(n) == s, do: n
-  defp rightsize(n, s) when byte_size(n) <  s, do: rightsize(n <> <<0>>, s)
+  defp rightsize(n, s) when byte_size(n) < s, do: rightsize(n <> <<0>>, s)
 
   @doc """
   Sign a message
@@ -120,34 +133,39 @@ defmodule Ed25519 do
   @spec signature(binary, key, key) :: signature
   def signature(m, sk, pk \\ nil)
   def signature(m, sk, nil), do: signature(m, sk, derive_public_key(sk))
+
   def signature(m, sk, pk) do
     h = hash(sk)
     a = a_from_hash(h)
     r = hashint(:binary.part(h, 32, 32) <> m)
     bigr = r |> scalarmult(@base) |> encodepoint
     s = mod(r + hashint(bigr <> pk <> m) * a, @l)
-    bigr <> encodeint(s) |> rightsize(64)
+    (bigr <> encodeint(s)) |> rightsize(64)
   end
 
   defp a_from_hash(h) do
-    @t254 + (h |> :binary.part(0, 32) |> :binary.decode_unsigned(:little) |> band(0xf3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8))
+    @t254 +
+      (h |> :binary.part(0, 32) |> :binary.decode_unsigned(:little)
+       |> band(0xF3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8))
   end
 
   defp scalarmult(0, _pair), do: {0, 1}
+
   defp scalarmult(e, p) do
-     q = e |> div(2) |> scalarmult(p)
-     q = edwards(q, q)
-     case (e &&& 1) do
-       1 -> edwards(q, p)
-       _ -> q
-     end
+    q = e |> div(2) |> scalarmult(p)
+    q = edwards(q, q)
+
+    case e &&& 1 do
+      1 -> edwards(q, p)
+      _ -> q
+    end
   end
 
   @doc """
   validate a signed message
   """
   @spec valid_signature?(signature, binary, key) :: boolean
-  def valid_signature?(s, m, pk) when byte_size(s) == 64 and byte_size(pk) == 32  do
+  def valid_signature?(s, m, pk) when byte_size(s) == 64 and byte_size(pk) == 32 do
     <<for_r::binary-size(32), for_s::binary-size(32)>> = s
     r = decodepoint(for_r)
     a = decodepoint(pk)
@@ -155,6 +173,7 @@ defmodule Ed25519 do
     h = hashint(encodepoint(r) <> pk <> m)
     scalarmult(s, @base) == edwards(r, scalarmult(h, a))
   end
+
   def valid_signature?(_s, _m_, _pk), do: false
 
   @doc """
@@ -173,10 +192,10 @@ defmodule Ed25519 do
   """
   @spec derive_public_key(key) :: key
   def derive_public_key(sk) do
-    sk |> hash
-       |> a_from_hash
-       |> scalarmult(@base)
-       |> encodepoint
+    sk
+    |> hash
+    |> a_from_hash
+    |> scalarmult(@base)
+    |> encodepoint
   end
-
 end
