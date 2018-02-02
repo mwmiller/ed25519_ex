@@ -197,7 +197,6 @@ defmodule Ed25519 do
     {secret, derive_public_key(secret)}
   end
 
-
   @doc """
   derive the public signing key from the secret key
   """
