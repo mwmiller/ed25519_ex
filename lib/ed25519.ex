@@ -188,6 +188,17 @@ defmodule Ed25519 do
   end
 
   @doc """
+  Generate a secret/public key pair from supplied secret
+
+  Returned tuple contains `{secret_key, derived_public_key}`
+  """
+  @spec generate_key_pair(key) :: {key, key}
+  def generate_key_pair(secret) do
+    {secret, derive_public_key(secret)}
+  end
+
+
+  @doc """
   derive the public signing key from the secret key
   """
   @spec derive_public_key(key) :: key

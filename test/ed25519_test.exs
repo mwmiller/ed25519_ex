@@ -9,6 +9,10 @@ defmodule Ed25519Test do
     assert byte_size(sk) == 32, "Proper sized secret key"
     assert byte_size(pk) == 32, "Proper sized public key"
 
+    #test key generation with provided secret using the random sk
+    {sk, pk2} = Ed25519.generate_key_pair(sk)
+    assert pk2 == pk
+
     assert Ed25519.derive_public_key(sk) == pk, "Can re-derive the public key from the secret key"
   end
 
