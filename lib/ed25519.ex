@@ -65,7 +65,7 @@ defmodule Ed25519 do
   # __using__ Macro generates the hash function at compile time, which allows the
   # hashing function to be configurable without runtime overhead
   use Ed25519.Hash
-  defp hashint(m), do: m |> hash |> decodeint
+  defp hashint(m), do: m |> hash |> :binary.decode_unsigned(:little)
 
   # :crypto.mod_pow chokes on negative inputs, so we feed it positive values
   # only and patch up the result if necessary
@@ -93,21 +93,18 @@ defmodule Ed25519 do
     {mod(x, @p), mod(y, @p)}
   end
 
-  defp encodeint(x), do: x |> :binary.encode_unsigned(:little)
-
   defp encodepoint({x, y}) do
-    y
-    |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
-    |> bor((x &&& 1) <<< 255)
-    |> encodeint
+    val =
+      y
+      |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+      |> bor((x &&& 1) <<< 255)
+
+    <<val::little-size(256)>>
   end
 
-  defp decodeint(x), do: x |> :binary.decode_unsigned(:little)
-
-  defp decodepoint(n) do
-    decoded = n |> :binary.decode_unsigned(:little)
-    xc = decoded |> bsr(255)
-    y = decoded |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+  defp decodepoint(<<n::little-size(256)>>) do
+    xc = n |> bsr(255)
+    y = n |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
     x = xrecover(y)
 
     point =
@@ -120,9 +117,6 @@ defmodule Ed25519 do
   end
 
   defp isoncurve({x, y}), do: (-x * x + y * y - 1 - @d * x * x * y * y) |> mod(@p) == 0
-
-  defp rightsize(n, s) when byte_size(n) == s, do: n
-  defp rightsize(n, s) when byte_size(n) < s, do: rightsize(n <> <<0>>, s)
 
   @doc """
   Sign a message
@@ -140,12 +134,12 @@ defmodule Ed25519 do
     r = hashint(:binary.part(h, 32, 32) <> m)
     bigr = r |> scalarmult(@base) |> encodepoint
     s = mod(r + hashint(bigr <> pk <> m) * a, @l)
-    (bigr <> encodeint(s)) |> rightsize(64)
+    bigr <> <<s::little-size(256)>>
   end
 
-  defp a_from_hash(h) do
+  defp a_from_hash(<<h::little-size(256), _rest::binary>>) do
     @t254 +
-      (h |> :binary.part(0, 32) |> :binary.decode_unsigned(:little)
+      (h
        |> band(0xF3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF8))
   end
 
@@ -165,11 +159,10 @@ defmodule Ed25519 do
   validate a signed message
   """
   @spec valid_signature?(signature, binary, key) :: boolean
-  def valid_signature?(s, m, pk) when byte_size(s) == 64 and byte_size(pk) == 32 do
-    <<for_r::binary-size(32), for_s::binary-size(32)>> = s
+  def valid_signature?(<<for_r::binary-size(32), s::little-size(256)>>, m, pk)
+      when byte_size(pk) == 32 do
     r = decodepoint(for_r)
     a = decodepoint(pk)
-    s = decodeint(for_s)
     h = hashint(encodepoint(r) <> pk <> m)
     scalarmult(s, @base) == edwards(r, scalarmult(h, a))
   end

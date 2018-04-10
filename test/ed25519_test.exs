@@ -16,6 +16,7 @@ defmodule Ed25519Test do
     assert Ed25519.derive_public_key(sk) == pk, "Can re-derive the public key from the secret key"
   end
 
+  @tag timeout: :infinity
   test "cr.yp.to examples" do
     test_em = fn
       [], _fun ->
