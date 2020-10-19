@@ -17,14 +17,14 @@ defmodule Ed25519.Mixfile do
   end
 
   def application do
-    []
+    [extra_applications: [:crypto]]
   end
 
   defp deps do
     [
-      {:earmark, "~> 1.0", only: :dev},
-      {:ex_doc, "~> 0.18", only: :dev},
-      {:credo, "~> 1.0", only: [:dev, :test]}
+      {:earmark, "~> 1.4", only: :dev},
+      {:ex_doc, "~> 0.23", only: :dev},
+      {:credo, "~> 1.4", only: [:dev, :test]}
     ]
   end
 
