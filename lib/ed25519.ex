@@ -119,6 +119,19 @@ defmodule Ed25519 do
   defp isoncurve({x, y}), do: (-x * x + y * y - 1 - @d * x * x * y * y) |> mod(@p) == 0
 
   @doc """
+  Returns whether a given `key` lies on the ed25519 curve.
+  """
+  @spec on_curve?(key) :: boolean
+  def on_curve?(key) do
+    try do
+      decodepoint(key)
+      true
+    rescue
+      _error -> false
+    end
+  end
+
+  @doc """
   Sign a message
 
   If only the secret key is provided, the public key will be derived therefrom.
