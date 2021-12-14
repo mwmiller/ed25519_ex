@@ -13,7 +13,7 @@ defmodule Ed25519 do
 
   `config/config.exs`
 
-      use Mix.Config
+      import Config
 
       # The hash function will be invoked as 'Blake2.hash2b(payload, 16)'
       config :ed25519,
@@ -113,8 +113,10 @@ defmodule Ed25519 do
         _ -> {@p - x, y}
       end
 
-    if isoncurve(point), do: point, else: raise("Point off curve")
+    if isoncurve(point), do: point, else: raise("Point off Edwards curve")
   end
+
+  defp decodepoint(_), do: raise("Provided value not a key")
 
   defp isoncurve({x, y}), do: (-x * x + y * y - 1 - @d * x * x * y * y) |> mod(@p) == 0
 
@@ -225,11 +227,18 @@ defmodule Ed25519 do
   @doc """
   Derive the x25519/curve25519 encryption key from the ed25519 signing key
 
+
   By converting an `EdwardsPoint` on the Edwards model to the corresponding `MontgomeryPoint` on the Montgomery model
+
+  Handles either `:secret` or `:public` keys as indicated in the call
+
+  May `raise` on an invalid input key or unknown atom
 
   See: https://blog.filippo.io/using-ed25519-keys-for-encryption
   """
   @spec to_curve25519(key, atom) :: key
+  def to_curve25519(key, which)
+
   def to_curve25519(ed_public_key, :public) do
     {_, y} = decodepoint(ed_public_key)
     u = mod((1 + y) * inv(1 - y), @p)
