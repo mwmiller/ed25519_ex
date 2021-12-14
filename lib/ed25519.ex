@@ -102,10 +102,6 @@ defmodule Ed25519 do
     <<val::little-size(256)>>
   end
 
-  defp decodepoint_y(<<n::little-size(256)>>) do
-    n |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
-  end
-
   defp decodepoint(<<n::little-size(256)>>) do
     xc = n |> bsr(255)
     y = n |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
@@ -233,7 +229,7 @@ defmodule Ed25519 do
   """
   @spec to_curve25519_public_key(key) :: key
   def to_curve25519_public_key(ed_public_key) do
-    y = decodepoint_y(ed_public_key)
+    {_, y} = decodepoint(ed_public_key)
     u = mod((1 + y) * inv(1 - y), @p)
     <<u::little-size(256)>>
   end
