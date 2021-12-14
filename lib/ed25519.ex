@@ -102,6 +102,10 @@ defmodule Ed25519 do
     <<val::little-size(256)>>
   end
 
+  defp decodepoint_y(<<n::little-size(256)>>) do
+    n |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+  end
+
   defp decodepoint(<<n::little-size(256)>>) do
     xc = n |> bsr(255)
     y = n |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
@@ -168,6 +172,13 @@ defmodule Ed25519 do
     end
   end
 
+  defp clamp(c) do
+    c
+    |> band(~~~7)
+    |> band(~~~(128 <<< (8 * 31)))
+    |> bor(64 <<< (8 * 31))
+  end
+
   @doc """
   validate a signed message
   """
@@ -213,5 +224,28 @@ defmodule Ed25519 do
     |> a_from_hash
     |> scalarmult(@base)
     |> encodepoint
+  end
+
+  @doc """
+  Derive the x25519/curve25519 public key (encryption) from the ed25519 public key (signing)
+
+  By converting an `EdwardsPoint` on the Edwards model to the corresponding `MontgomeryPoint` on the Montgomery model
+  """
+  @spec to_curve25519_public_key(key) :: key
+  def to_curve25519_public_key(ed_public_key) do
+    y = decodepoint_y(ed_public_key)
+    u = mod((1 + y) * inv(1 - y), @p)
+    <<u::little-size(256)>>
+  end
+
+  @doc """
+  Derive the x25519/curve25519 secret key (encryption) from the ed25519 secret key (signing)
+
+  See: https://blog.filippo.io/using-ed25519-keys-for-encryption
+  """
+  @spec to_curve25519_secret_key(key) :: key
+  def to_curve25519_secret_key(ed_secret_key) do
+    <<digest32::little-size(256), _::binary-size(32)>> = :crypto.hash(:sha512, ed_secret_key)
+    <<clamp(digest32)::little-size(256)>>
   end
 end
