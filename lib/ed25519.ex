@@ -223,24 +223,20 @@ defmodule Ed25519 do
   end
 
   @doc """
-  Derive the x25519/curve25519 public key (encryption) from the ed25519 public key (signing)
+  Derive the x25519/curve25519 encryption key from the ed25519 signing key
 
   By converting an `EdwardsPoint` on the Edwards model to the corresponding `MontgomeryPoint` on the Montgomery model
+
+  See: https://blog.filippo.io/using-ed25519-keys-for-encryption
   """
-  @spec to_curve25519_public_key(key) :: key
-  def to_curve25519_public_key(ed_public_key) do
+  @spec to_curve25519(key, atom) :: key
+  def to_curve25519(ed_public_key, :public) do
     {_, y} = decodepoint(ed_public_key)
     u = mod((1 + y) * inv(1 - y), @p)
     <<u::little-size(256)>>
   end
 
-  @doc """
-  Derive the x25519/curve25519 secret key (encryption) from the ed25519 secret key (signing)
-
-  See: https://blog.filippo.io/using-ed25519-keys-for-encryption
-  """
-  @spec to_curve25519_secret_key(key) :: key
-  def to_curve25519_secret_key(ed_secret_key) do
+  def to_curve25519(ed_secret_key, :secret) do
     <<digest32::little-size(256), _::binary-size(32)>> = :crypto.hash(:sha512, ed_secret_key)
     <<clamp(digest32)::little-size(256)>>
   end
