@@ -1,5 +1,5 @@
 defmodule Ed25519 do
-  use Bitwise
+  import Bitwise
 
   @moduledoc """
   Ed25519 signature functions
