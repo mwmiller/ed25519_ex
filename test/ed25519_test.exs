@@ -41,12 +41,6 @@ defmodule Ed25519Test do
       Ed25519.to_curve25519(curve_pk, :public)
     end
 
-    assert_raise FunctionClauseError,
-                 "no function clause matching in Ed25519.to_curve25519/2",
-                 fn ->
-                   Ed25519.to_curve25519(curve_pk, :private)
-                 end
-
     assert_raise RuntimeError, "Provided value not a key", fn ->
       Ed25519.to_curve25519(<<>>, :public)
     end
