@@ -67,10 +67,6 @@ defmodule Ed25519 do
   use Ed25519.Hash
   defp hashint(m), do: m |> hash |> :binary.decode_unsigned(:little)
 
-  # :crypto.mod_pow chokes on negative inputs, so we feed it positive values
-  # only and patch up the result if necessary
-  defp expmod(_b, 0, _m), do: 1
-
   defp expmod(b, e, m) when b > 0 do
     b |> :crypto.mod_pow(e, m) |> :binary.decode_unsigned()
   end
@@ -139,7 +135,7 @@ defmodule Ed25519 do
   If only the secret key is provided, the public key will be derived therefrom.
   This adds significant overhead.
   """
-  @spec signature(binary, key, key) :: signature
+  @spec signature(binary, key, key | nil) :: signature
   def signature(m, sk, pk \\ nil)
   def signature(m, sk, nil), do: signature(m, sk, derive_public_key(sk))
 
