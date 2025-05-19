@@ -22,7 +22,9 @@ defmodule Ed25519.Mixfile do
 
   defp deps do
     [
-      {:ex_doc, "~> 0.23", only: :dev}
+      {:ex_doc, "~> 0.23", only: :dev},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev], runtime: false}
     ]
   end
 
