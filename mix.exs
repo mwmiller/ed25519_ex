@@ -4,7 +4,7 @@ defmodule Ed25519.Mixfile do
   def project do
     [
       app: :ed25519,
-      version: "1.4.3",
+      version: "1.4.4",
       elixir: "~> 1.7",
       name: "Ed25519",
       source_url: "https://github.com/mwmiller/ed25519_ex",
