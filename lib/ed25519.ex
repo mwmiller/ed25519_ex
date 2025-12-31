@@ -98,7 +98,7 @@ defmodule Ed25519 do
     <<val::little-size(256)>>
   end
 
-  defp decodepoint(<<n::little-size(256)>>) do
+  defp decodepoint!(<<n::little-size(256)>>) do
     xc = n |> bsr(255)
     y = n |> band(0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
     x = xrecover(y)
@@ -109,12 +109,25 @@ defmodule Ed25519 do
         _ -> {@p - x, y}
       end
 
-    if isoncurve(point), do: point, else: raise("Point off Edwards curve")
+    case is_on_curve?(point) && is_on_main_subgroup?(point) do
+      true ->
+        point
+
+      false ->
+        raise("Point is not in the curve main subgroup")
+    end
   end
 
-  defp decodepoint(_), do: raise("Provided value not a key")
+  defp decodepoint!(_), do: raise("Provided value not a key")
 
-  defp isoncurve({x, y}), do: (-x * x + y * y - 1 - @d * x * x * y * y) |> mod(@p) == 0
+  defp is_on_curve?({x, y}), do: (-x * x + y * y - 1 - @d * x * x * y * y) |> mod(@p) == 0
+
+  defp is_on_main_subgroup?(point) do
+    case scalarmult(@l, point) do
+      {0, 1} -> true
+      _ -> false
+    end
+  end
 
   @doc """
   Returns whether a given `key` lies on the ed25519 curve.
@@ -122,7 +135,7 @@ defmodule Ed25519 do
   @spec on_curve?(key) :: boolean
   def on_curve?(key) do
     try do
-      decodepoint(key)
+      decodepoint!(key)
       true
     rescue
       _error -> false
@@ -179,8 +192,8 @@ defmodule Ed25519 do
   @spec valid_signature?(signature, binary, key) :: boolean
   def valid_signature?(<<for_r::binary-size(32), s::little-size(256)>>, m, pk)
       when byte_size(pk) == 32 do
-    r = decodepoint(for_r)
-    a = decodepoint(pk)
+    r = decodepoint!(for_r)
+    a = decodepoint!(pk)
     h = hashint(encodepoint(r) <> pk <> m)
     scalarmult(s, @base) == edwards(r, scalarmult(h, a))
   end
@@ -236,7 +249,7 @@ defmodule Ed25519 do
   def to_curve25519(key, which)
 
   def to_curve25519(ed_public_key, :public) do
-    {_, y} = decodepoint(ed_public_key)
+    {_, y} = decodepoint!(ed_public_key)
     u = mod((1 + y) * inv(1 - y), @p)
     <<u::little-size(256)>>
   end

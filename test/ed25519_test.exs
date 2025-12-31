@@ -37,7 +37,7 @@ defmodule Ed25519Test do
 
     assert Ed25519.to_curve25519(pk, :public) == curve_pk
 
-    assert_raise RuntimeError, "Point off Edwards curve", fn ->
+    assert_raise RuntimeError, "Point is not in the curve main subgroup", fn ->
       Ed25519.to_curve25519(curve_pk, :public)
     end
 
@@ -71,5 +71,23 @@ defmodule Ed25519Test do
     end
 
     test_em.(CryptoVectors.testcases(), test_em)
+  end
+
+  test "rejects small order point (libsodium vulnerability)" do
+    # See https://00f.net/2025/12/30/libsodium-vulnerability/
+    p =
+      57_896_044_618_658_097_711_785_492_504_343_953_926_634_992_332_820_282_019_728_792_003_956_564_819_949
+
+    y = p - 1
+    # x is 0, so bit 255 is 0.
+    encoded = :binary.encode_unsigned(y, :little)
+
+    # Ensure it is exactly 32 bytes (which it should be for this value)
+    assert byte_size(encoded) == 32
+
+    # This point (0, -1) is on the curve but has order 2 (small subgroup).
+    # It should be rejected by strict validation (like the libsodium fix).
+    refute Ed25519.on_curve?(encoded),
+           "Point (0, -1) should be rejected as it is not in the main subgroup"
   end
 end
