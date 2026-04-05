@@ -62,6 +62,28 @@ defmodule Ed25519 do
   defp mod(x, y) when x > 0, do: rem(x, y)
   defp mod(x, y) when x < 0, do: rem(y + rem(x, y), y)
 
+  # Extended projective coordinates (X:Y:Z:T) where x=X/Z, y=Y/Z, xy=T/Z
+  # Unified addition formula eliminates expensive inversions during scalarmult
+
+  defp point_add({x1, y1, z1, t1}, {x2, y2, z2, t2}) do
+    a = mod((y1 - x1) * (y2 - x2), @p)
+    b = mod((y1 + x1) * (y2 + x2), @p)
+    c = mod(2 * t1 * t2 * @d, @p)
+    d = mod(2 * z1 * z2, @p)
+    e = mod(b - a, @p)
+    f = mod(d - c, @p)
+    g = mod(d + c, @p)
+    h = mod(b + a, @p)
+    {mod(e * f, @p), mod(g * h, @p), mod(f * g, @p), mod(e * h, @p)}
+  end
+
+  defp to_projective({x, y}), do: {x, y, 1, mod(x * y, @p)}
+
+  defp from_projective({x, y, z, _t}) do
+    inv_z = inv(z)
+    {mod(x * inv_z, @p), mod(y * inv_z, @p)}
+  end
+
   # __using__ Macro generates the hash function at compile time, which allows the
   # hashing function to be configurable without runtime overhead
   use Ed25519.Hash
@@ -169,13 +191,21 @@ defmodule Ed25519 do
 
   defp scalarmult(0, _pair), do: {0, 1}
 
-  defp scalarmult(e, p) do
-    q = e |> div(2) |> scalarmult(p)
-    q = edwards(q, q)
+  defp scalarmult(e, {_px, _py} = point) do
+    point_proj = to_projective(point)
+    scalarmult_proj(e, point_proj)
+    |> from_projective()
+  end
 
-    case e &&& 1 do
-      1 -> edwards(q, p)
-      _ -> q
+  defp scalarmult_proj(0, _point_proj), do: {0, 1, 1, 0}
+
+  defp scalarmult_proj(e, point_proj) do
+    half = scalarmult_proj(div(e, 2), point_proj)
+    doubled = point_add(half, half)
+
+    case rem(e, 2) do
+      1 -> point_add(doubled, point_proj)
+      _ -> doubled
     end
   end
 

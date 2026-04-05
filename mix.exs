@@ -4,7 +4,7 @@ defmodule Ed25519.Mixfile do
   def project do
     [
       app: :ed25519,
-      version: "1.5.0",
+      version: "1.5.1",
       elixir: "~> 1.7",
       name: "Ed25519",
       source_url: "https://github.com/mwmiller/ed25519_ex",
@@ -22,6 +22,7 @@ defmodule Ed25519.Mixfile do
 
   defp deps do
     [
+      {:benchee, "~> 1.3", only: :dev},
       {:ex_doc, "~> 0.23", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false}
