@@ -35,6 +35,12 @@ defmodule Ed25519 do
   @type signature :: binary
 
   @p 57_896_044_618_658_097_711_785_492_504_343_953_926_634_992_332_820_282_019_728_792_003_956_564_819_949
+  @twopow256 1 <<< 256
+  @table_key {__MODULE__, :base_table}
+  @window_bits 6
+  @window_size 1 <<< @window_bits
+  @window_mask @window_size - 1
+  @window_count div(256 + @window_bits - 1, @window_bits)
   @l 7_237_005_577_332_262_213_973_186_563_042_994_240_857_116_359_379_907_606_001_950_938_285_454_250_989
   @d -4_513_249_062_541_557_337_682_894_930_092_624_173_785_641_285_191_125_241_628_941_591_882_900_924_598_840_740
   @i 19_681_161_376_707_505_956_807_079_304_988_542_015_446_066_515_923_890_162_744_021_073_123_829_784_752
@@ -131,7 +137,7 @@ defmodule Ed25519 do
         _ -> {@p - x, y}
       end
 
-    case is_on_curve?(point) && is_on_main_subgroup?(point) do
+    case point_on_curve?(point) && on_main_subgroup?(point) do
       true ->
         point
 
@@ -142,9 +148,9 @@ defmodule Ed25519 do
 
   defp decodepoint!(_), do: raise("Provided value not a key")
 
-  defp is_on_curve?({x, y}), do: (-x * x + y * y - 1 - @d * x * x * y * y) |> mod(@p) == 0
+  defp point_on_curve?({x, y}), do: (-x * x + y * y - 1 - @d * x * x * y * y) |> mod(@p) == 0
 
-  defp is_on_main_subgroup?(point) do
+  defp on_main_subgroup?(point) do
     case scalarmult(@l, point) do
       {0, 1} -> true
       _ -> false
@@ -178,7 +184,8 @@ defmodule Ed25519 do
     h = hash(sk)
     a = a_from_hash(h)
     r = hashint(:binary.part(h, 32, 32) <> m)
-    bigr = r |> scalarmult(@base) |> encodepoint
+    # B has order @l, so reducing the 512-bit hash first is equivalent
+    bigr = r |> mod(@l) |> scalarmult(@base) |> encodepoint
     s = mod(r + hashint(bigr <> pk <> m) * a, @l)
     bigr <> <<s::little-size(256)>>
   end
@@ -191,22 +198,93 @@ defmodule Ed25519 do
 
   defp scalarmult(0, _pair), do: {0, 1}
 
+  # Table-backed multiplication for the fixed base point (see base_table/0).
+  # Scalars above 2^256 fall through to the generic path.
+  defp scalarmult(e, @base) when e > 0 and e < @twopow256 do
+    e |> base_mul() |> from_projective()
+  end
+
   defp scalarmult(e, {_px, _py} = point) do
     point_proj = to_projective(point)
+
     scalarmult_proj(e, point_proj)
     |> from_projective()
   end
 
-  defp scalarmult_proj(0, _point_proj), do: {0, 1, 1, 0}
-
+  # MSB-first double-and-add over the scalar bits; tail recursive and free
+  # of the per-level bignum div/rem the previous formulation needed
   defp scalarmult_proj(e, point_proj) do
-    half = scalarmult_proj(div(e, 2), point_proj)
-    doubled = point_add(half, half)
+    e |> :binary.encode_unsigned() |> walk_bits(point_proj, {0, 1, 1, 0})
+  end
 
-    case rem(e, 2) do
-      1 -> point_add(doubled, point_proj)
-      _ -> doubled
+  defp walk_bits(<<>>, _point_proj, acc), do: acc
+
+  defp walk_bits(<<bit::1, rest::bits>>, point_proj, acc) do
+    acc = point_add(acc, acc)
+
+    case bit do
+      1 -> walk_bits(rest, point_proj, point_add(acc, point_proj))
+      0 -> walk_bits(rest, point_proj, acc)
     end
+  end
+
+  # k * B via windows over the precomputed table
+  # T[j][i] = i * 2^(@window_bits * j) * B, so the multiplication needs one
+  # addition per non-zero digit and no doublings at all.
+  defp base_mul(e), do: base_mul(e, base_table(), 0, {0, 1, 1, 0})
+
+  defp base_mul(0, _table, _window, acc), do: acc
+
+  defp base_mul(e, table, window, acc) do
+    digit = e &&& @window_mask
+
+    acc =
+      case digit do
+        0 -> acc
+        _ -> point_add(acc, :erlang.element(window * @window_size + digit + 1, table))
+      end
+
+    base_mul(e >>> @window_bits, table, window + 1, acc)
+  end
+
+  defp base_table do
+    case :persistent_term.get(@table_key, nil) do
+      nil ->
+        table = build_base_table()
+        :persistent_term.put(@table_key, table)
+        table
+
+      table ->
+        table
+    end
+  end
+
+  defp build_base_table do
+    identity = {0, 1, 1, 0}
+    base_proj = to_projective(@base)
+
+    # window 0: {i * B} for i = 0..(@window_size - 1)
+    window0 =
+      Enum.reduce(1..(@window_size - 1), [identity], fn _i, [prev | _] = acc ->
+        [point_add(prev, base_proj) | acc]
+      end)
+      |> Enum.reverse()
+
+    # each later window is the previous one shifted up by @window_bits bits
+    windows =
+      Enum.reduce(1..(@window_count - 1), [window0], fn _, [prev | _] = acc ->
+        [shift_window(prev) | acc]
+      end)
+      |> Enum.reverse()
+      |> Enum.concat()
+
+    List.to_tuple(windows)
+  end
+
+  defp shift_window(window) do
+    Enum.map(window, fn point ->
+      Enum.reduce(1..@window_bits, point, fn _, p -> point_add(p, p) end)
+    end)
   end
 
   defp clamp(c) do
@@ -225,7 +303,9 @@ defmodule Ed25519 do
     r = decodepoint!(for_r)
     a = decodepoint!(pk)
     h = hashint(encodepoint(r) <> pk <> m)
-    scalarmult(s, @base) == edwards(r, scalarmult(h, a))
+    # All involved points have order @l (decodepoint! enforces the main
+    # subgroup), so the 512-bit hash and 256-bit s may be reduced first
+    scalarmult(mod(s, @l), @base) == edwards(r, scalarmult(mod(h, @l), a))
   end
 
   def valid_signature?(_s, _m_, _pk), do: false

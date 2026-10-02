@@ -90,4 +90,37 @@ defmodule Ed25519Test do
     refute Ed25519.on_curve?(encoded),
            "Point (0, -1) should be rejected as it is not in the main subgroup"
   end
+
+  test "random key sign/verify roundtrip" do
+    for _ <- 1..25 do
+      {sk, pk} = Ed25519.generate_key_pair()
+      msg = :crypto.strong_rand_bytes(:rand.uniform(200))
+      sig = Ed25519.signature(msg, sk, pk)
+
+      assert byte_size(sig) == 64
+      assert Ed25519.valid_signature?(sig, msg, pk)
+    end
+  end
+
+  test "rejects tampered signatures" do
+    {sk, pk} = Ed25519.generate_key_pair()
+    sig = Ed25519.signature("message", sk, pk)
+    <<r::binary-size(32), s::little-size(256)>> = sig
+
+    refute Ed25519.valid_signature?(sig, "other message", pk)
+    refute Ed25519.valid_signature?(<<r::binary, s + 1::little-size(256)>>, "message", pk)
+    refute Ed25519.valid_signature?(<<r::binary, s - 1::little-size(256)>>, "message", pk)
+  end
+
+  test "verification reduces scalars modulo the group order" do
+    l =
+      7_237_005_577_332_262_213_973_186_563_042_994_240_857_116_359_379_907_606_001_950_938_285_454_250_989
+
+    {sk, pk} = Ed25519.generate_key_pair()
+    msg = "reduction check"
+    <<r::binary-size(32), s::little-size(256)>> = Ed25519.signature(msg, sk, pk)
+
+    assert Ed25519.valid_signature?(<<r::binary, s::little-size(256)>>, msg, pk)
+    assert Ed25519.valid_signature?(<<r::binary, s + l::little-size(256)>>, msg, pk)
+  end
 end
